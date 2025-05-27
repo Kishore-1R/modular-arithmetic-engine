@@ -25,8 +25,8 @@ def naive_modular_exponentiation(a, b, n):
 
 # Kernel for naive modular multiplication by repeated addition
 _naive_mod_mul_loop_kernel = cp.ElementwiseKernel(
-    in_params='unsigned long long a, unsigned long long b, unsigned long long n',
-    out_params='unsigned long long out',
+    in_params='uint64 a, uint64 b, uint64 n',
+    out_params='uint64 out',
     operation=r'''
         unsigned long long result = 0;
         for (unsigned long long i = 0; i < b; ++i) {
@@ -49,8 +49,8 @@ def naive_modular_multiplication_loop(a, b, n):
 
 # Kernel for naive modular exponentiation by repeated multiplication
 _naive_mod_exp_loop_kernel = cp.ElementwiseKernel(
-    in_params='unsigned long long a, unsigned long long b, unsigned long long n',
-    out_params='unsigned long long out',
+    in_params='uint64 a, uint64 b, uint64 n',
+    out_params='uint64 out',
     operation=r'''
         unsigned long long result = 1;
         for (unsigned long long i = 0; i < b; ++i) {
@@ -73,8 +73,8 @@ def naive_modular_exponentiation_loop(a, b, n):
 
 # Kernel for square‐and‐multiply modular exponentiation
 _square_and_multiply_kernel = cp.ElementwiseKernel(
-    in_params='unsigned long long a, unsigned long long b, unsigned long long n',
-    out_params='unsigned long long out',
+    in_params='uint64 a, uint64 b, uint64 n',
+    out_params='uint64 out',
     operation=r'''
         unsigned long long result = 1;
         unsigned long long base   = a % n;
@@ -146,10 +146,10 @@ def from_montgomery(a, n, r):
 # Kernel for classical Montgomery modular multiplication
 _montgomery_mul_kernel = cp.ElementwiseKernel(
     in_params=(
-        'unsigned long long a, unsigned long long b, '
-        'unsigned long long n, unsigned long long r, unsigned long long n_dash'
+        'uint64 a, uint64 b, '
+        'uint64 n, uint64 r, uint64 n_dash'
     ),
-    out_params='unsigned long long out',
+    out_params='uint64 out',
     operation=r'''
         // t = a * b
         unsigned long long t = a * b;
@@ -180,10 +180,10 @@ def montgomery_modular_multiplication(a, b, n, r, n_dash):
 # Kernel for optimized Montgomery when r=2^k
 _optimized_montgomery_mul_kernel = cp.ElementwiseKernel(
     in_params=(
-        'unsigned long long a, unsigned long long b, '
-        'unsigned long long n, unsigned long long r_mask, unsigned long long shift, unsigned long long n_dash'
+        'uint64 a, uint64 b, '
+        'uint64 n, uint64 r_mask, uint64 shift, uint64 n_dash'
     ),
-    out_params='unsigned long long out',
+    out_params='uint64 out',
     operation=r'''
         unsigned long long t = a * b;
         // fast mod r via bitmask
@@ -198,15 +198,27 @@ _optimized_montgomery_mul_kernel = cp.ElementwiseKernel(
 
 def optimized_montgomery_modular_multiplication(a, b, n, r, n_dash):
     """
-    Montgomery multiplication optimized for r=2^k.
-    r_mask = r-1, shift = k
+    Montgomery multiplication optimized for r = 2^k.
+    r and n_dash must be Python ints (as returned by montgomery_precomputation).
     """
-    a = cp.asarray(a, dtype=cp.uint64)
-    b = cp.asarray(b, dtype=cp.uint64)
-    n = cp.asarray(n, dtype=cp.uint64)
-    r = cp.asarray(r, dtype=cp.uint64)
-    n_dash = cp.asarray(n_dash, dtype=cp.uint64)
-    # compute mask and shift from r
-    shift = r.dtype.type(r).bit_length() - 1  # since r=1<<k
-    r_mask = r - cp.uint64(1)
-    return _optimized_montgomery_mul_kernel(a, b, n, r_mask, cp.uint64(shift), n_dash)
+    # 1) compute mask and shift on the CPU
+    #    r = 1 << k  =>  k = bit_length(r)-1
+    k    = r.bit_length() - 1
+    mask = (1 << k) - 1
+
+    # 2) move data to GPU-friendly uint64 arrays/scalars
+    a_cpu      = int(a) if isinstance(a, (int,)) else None
+    b_cpu      = int(b) if isinstance(b, (int,)) else None
+    n_cpu      = int(n) if isinstance(n, (int,)) else None
+
+    a_gpu      = cp.asarray(a_cpu if a_cpu is not None else a, dtype=cp.uint64)
+    b_gpu      = cp.asarray(b_cpu if b_cpu is not None else b, dtype=cp.uint64)
+    n_gpu      = cp.asarray(n_cpu if n_cpu is not None else n, dtype=cp.uint64)
+    r_mask_gpu = cp.uint64(mask)
+    shift_gpu  = cp.uint64(k)
+    n_dash_gpu = cp.asarray(n_dash, dtype=cp.uint64)
+
+    # 3) launch the elementwise kernel
+    return _optimized_montgomery_mul_kernel(
+        a_gpu, b_gpu, n_gpu, r_mask_gpu, shift_gpu, n_dash_gpu
+    )
