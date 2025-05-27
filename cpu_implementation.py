@@ -1,5 +1,4 @@
 import numpy as np
-#import cupy as cp
 
 ### Level 1
 def naive_modular_multiplication(a, b, n):
@@ -80,12 +79,3 @@ def optimized_montgomery_modular_multiplication(a, b, n, r, n_dash):
 #     if t < 0:
 #         t += n
 #     return t
-
-
-## GPU version with cupy
-
-# def gpu_naive_modular_multiplication(a, b, n):
-#     a = cp.asarray(a)
-#     b = cp.asarray(b)
-#     n = cp.asarray(n)
-#     return (a*b) % n     
