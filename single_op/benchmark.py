@@ -1,6 +1,5 @@
 import time
 import random
-
 import numpy as np
 
 # import your CPU and GPU modules
