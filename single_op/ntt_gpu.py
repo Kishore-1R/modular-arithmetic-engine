@@ -1,8 +1,8 @@
-import single_op.gpu_implementation as gpu
+import gpu_implementation as gpu
 import numpy as np
 # a: array of polynomial coefficients
-# p: primitive root
-# g: modulus
+# p: prime
+# g: primitive root
 def ntt_gpu(a, p, g):
     n = len(a)
     if n == 1:
@@ -82,7 +82,7 @@ def intt_gpu_rec_opt(a, p, g):
 
     r, n_dash = gpu.montgomery_precomputation(p)
     g_inv_mont = gpu.to_montgomery(g_inv, p, r)
-    g_inv_mod_p = gpu.from_montgomery(gpu.optimized_montgomery_modular_multiplication(g_inv_mont, g_inv_mont, p, r, n_dash), p, r)
+    g_inv_mod_p = gpu.optimized_montgomery_modular_multiplication(g_inv_mont, g_inv_mont, p, r, n_dash)
     even = intt_gpu_rec(a[::2], p, g_inv_mod_p)
     odd = intt_gpu_rec(a[1::2], p, g_inv_mod_p)
 
@@ -106,9 +106,9 @@ def intt_gpu_opt(a, p, g):
 
 
 def main():
-    input_array = np.array([12, 20, 33, 14])
-    prime = 37
-    primitive_root = 2
+    input_array = np.array([2, 4, 9, 4])
+    prime = 17
+    primitive_root = 3
     ntt_output = ntt_gpu_opt(input_array, prime, primitive_root)
     print("NTT:", ntt_output)
     intt_output = intt_gpu_opt(ntt_output, prime, primitive_root)

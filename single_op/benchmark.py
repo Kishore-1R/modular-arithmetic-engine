@@ -5,6 +5,8 @@ import numpy as np
 # import your CPU and GPU modules
 import cpu_implementation as cpu
 import gpu_implementation as gpu
+import ntt_gpu as ntt_gpu
+import ntt_cpu as ntt_cpu
 
 def time_function(func, args, repeat, sync_gpu=False):
     """
@@ -18,7 +20,7 @@ def time_function(func, args, repeat, sync_gpu=False):
     if sync_gpu:
         import cupy as cp
         cp.cuda.Stream.null.synchronize()
-    t1 = time.perf_counter()
+    t1 = time.perf_counter() 
     return t1 - t0
 
 def main():
@@ -29,12 +31,20 @@ def main():
     a = random.randrange(N)
     b = random.randrange(N)
 
+    a_ntt = np.array([202, 401, 902, 403, 3003, 1233, 13])
+    a_intt = np.array([2, 10, 3, 10])
+    prime = 212801
+    primitive_root = 3
+    r_ntt, n_dash_ntt = gpu.montgomery_precomputation(prime)
+
     # for exponentiation loops we pick a smaller exponent
-    b_loop = 1000            # small so naive loop finishes in reasonable time
-    b_fm = 10**8             # for square‐and‐multiply
+    b_loop = 1            # small so naive loop finishes in reasonable time
+    b_fm = 10**5             # for square‐and‐multiply
 
     # Montgomery precompute (on CPU)
     r, n_dash = cpu.montgomery_precomputation(N)
+
+    
 
     # Warm‐up the GPU once so kernels compile before timing
     print("Warming up GPU kernels...")
@@ -54,19 +64,19 @@ def main():
             cpu.naive_modular_multiplication, 
             gpu.naive_modular_multiplication, 
             (a, b, N), (a, b, N), 
-            10_000_00, 10_000_00, False),
+            10_000, 10_000, False),
 
         ("naive_exp", 
             cpu.naive_modular_exponentiation, 
             gpu.naive_modular_exponentiation, 
             (a, b_fm, N), (a, b_fm, N), 
-            10_000, 10_000, False),
+            1, 1, False),
 
         ("loop_mul", 
             cpu.naive_modular_multiplication_loop, 
             gpu.naive_modular_multiplication_loop, 
             (a, b_loop, N), (a, b_loop, N), 
-            2_000, 2_000, True),
+            2_00, 2_00, True),
 
         ("loop_exp", 
             cpu.naive_modular_exponentiation_loop, 
@@ -78,19 +88,39 @@ def main():
             cpu.square_and_multiply_modular_exponentiation, 
             gpu.square_and_multiply_modular_exponentiation, 
             (a, b_fm, N), (a, b_fm, N), 
-            10_000, 10_000, True),
+            10_00, 10_00, True),
 
         ("montgomery_mul", 
             lambda x,y: cpu.montgomery_modular_multiplication(x, y, N, r, n_dash),
             lambda x,y: gpu.montgomery_modular_multiplication(x, y, N, r, n_dash),
             (a, b), (a, b), 
-            10_000, 10_000, True),
+            10_00, 10_00, True),
 
         ("opt_mont_mul",
             lambda x,y: cpu.optimized_montgomery_modular_multiplication(x, y, N, r, n_dash),
             lambda x,y: gpu.optimized_montgomery_modular_multiplication(x, y, N, r, n_dash),
             (a, b), (a, b),
-            10_000, 10_000, True),
+            10_00, 10_00, True),
+        ("ntt_naive",
+            lambda x,y: ntt_cpu.ntt_cpu(a_ntt, prime, primitive_root),
+            lambda x,y: ntt_gpu.ntt_gpu(a_ntt, prime, primitive_root),
+            (a, b), (a, b),
+            10_00, 10_00, True),
+        ("intt_naive",
+            lambda x,y: ntt_cpu.intt_cpu(a_intt, prime, primitive_root),
+            lambda x,y: ntt_gpu.intt_gpu(a_intt, prime, primitive_root),
+            (a, b), (a, b),
+            10_00, 10_00, True),
+        ("ntt_mont",
+            lambda x,y: ntt_cpu.ntt_cpu_opt(a_ntt, prime, primitive_root, r_ntt, n_dash_ntt),
+            lambda x,y: ntt_gpu.ntt_gpu_opt(a_ntt, prime, primitive_root),
+            (a, b), (a, b),
+            10_00, 10_00, True),
+        ("intt_mont",
+            lambda x,y: ntt_cpu.intt_cpu_opt(a_intt, prime, primitive_root, r_ntt, n_dash_ntt),
+            lambda x,y: ntt_gpu.intt_gpu_opt(a_intt, prime, primitive_root),
+            (a, b), (a, b),
+            10_00, 10_00, True),
     ]
 
     print(f"{'Kernel':20s}  {'CPU time (s)':>12s}   {'GPU time (s)':>12s}   {'speedup':>8s}")

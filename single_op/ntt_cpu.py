@@ -1,8 +1,8 @@
-import single_op.cpu_implementation as cpu
+import cpu_implementation as cpu
 import numpy as np
 # a: array of polynomial coefficients
-# p: primitive root
-# g: modulus
+# p: prime
+# g: primitive root
 def ntt_cpu(a, p, g):
     n = len(a)
     if n == 1:
@@ -52,15 +52,14 @@ def intt_cpu(a, p, g):
     
     return [cpu.naive_modular_multiplication(x, n_inv, p).item() for x in a]
 
-def ntt_cpu_opt(a, p, g):
+def ntt_cpu_opt(a, p, g, r, n_dash):
     n = len(a)
     if n == 1:
         return a
-    r, n_dash = cpu.montgomery_precomputation(p)
-    g_mont = cpu.to_montgomery(g, p, r)
-    g_mod_p = cpu.from_montgomery(cpu.optimized_montgomery_modular_multiplication(g_mont, g_mont, p, r, n_dash), p, r)
-    even = ntt_cpu(a[::2], p, g_mod_p)
-    odd = ntt_cpu(a[1::2], p, g_mod_p)
+        
+    g_mod_p = cpu.optimized_montgomery_modular_multiplication(g, g, p, r, n_dash)
+    even = ntt_cpu_opt(a[::2], p, g_mod_p, r, n_dash)
+    odd = ntt_cpu_opt(a[1::2], p, g_mod_p, r, n_dash)
 
     factor = 1;
     result = np.zeros(n, dtype=int)
@@ -73,18 +72,16 @@ def ntt_cpu_opt(a, p, g):
         
     return result
 
-def intt_cpu_rec_opt(a, p, g):
+def intt_cpu_rec_opt(a, p, g, r, n_dash):
     n = len(a)
     if n == 1:
         return a
-
     g_inv = pow(g, -1, p)
+    #g_inv_mont = cpu.to_montgomery(g_inv, p, r)
+    g_inv_mod_p = cpu.optimized_montgomery_modular_multiplication(g_inv, g_inv, p, r, n_dash)
 
-    r, n_dash = cpu.montgomery_precomputation(p)
-    g_inv_mont = cpu.to_montgomery(g_inv, p, r)
-    g_inv_mod_p = cpu.from_montgomery(cpu.optimized_montgomery_modular_multiplication(g_inv_mont, g_inv_mont, p, r, n_dash), p, r)
-    even = intt_cpu_rec(a[::2], p, g_inv_mod_p)
-    odd = intt_cpu_rec(a[1::2], p, g_inv_mod_p)
+    even = intt_cpu_rec_opt(a[::2], p, g_inv_mod_p, r, n_dash)
+    odd = intt_cpu_rec_opt(a[1::2], p, g_inv_mod_p, r, n_dash)
 
     factor = 1
     result = np.zeros(n, dtype=int)
@@ -97,21 +94,22 @@ def intt_cpu_rec_opt(a, p, g):
         
     return result
 
-def intt_cpu_opt(a, p, g):
+def intt_cpu_opt(a, p, g, r, n_dash):
     n = len(a)
-    a = intt_cpu_rec_opt(a, p, g)
+    a = intt_cpu_rec_opt(a, p, g, r, n_dash)
     n_inv = pow(n, -1, p)
     r, n_dash = cpu.montgomery_precomputation(p)
     return [cpu.from_montgomery(cpu.optimized_montgomery_modular_multiplication(cpu.to_montgomery(x, p, r), cpu.to_montgomery(n_inv, p, r), p, r, n_dash), p, r).item() for x in a]
 
 
 def main():
-    input_array = np.array([12, 20, 33, 14])
-    prime = 37
-    primitive_root = 2
-    ntt_output = ntt_cpu_opt(input_array, prime, primitive_root)
+    input_array = np.array([2, 4, 9, 4])
+    prime = 17
+    primitive_root = 3
+    r, n_dash = cpu.montgomery_precomputation(prime)
+    ntt_output = ntt_cpu(input_array, prime, primitive_root)
     print("NTT:", ntt_output)
-    intt_output = intt_cpu_opt(ntt_output, prime, primitive_root)
+    intt_output = intt_cpu(ntt_output, prime, primitive_root)
     print("INTT:", intt_output)
     
 if __name__=="__main__":
