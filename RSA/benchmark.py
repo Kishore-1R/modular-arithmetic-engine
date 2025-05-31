@@ -1,5 +1,3 @@
-# benchmark.py
-
 import numpy as np
 import time
 from RSA_Functions import montgomery_batch_cpu
