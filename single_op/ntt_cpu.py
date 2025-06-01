@@ -13,93 +13,50 @@ def ntt_cpu(a, p, g):
     odd = ntt_cpu(a[1::2], p, g_mod_p)
 
     factor = 1;
-    result = np.zeros(n, dtype=int)
+    result = np.zeros(n, dtype=np.longlong)
 
     for i in range(n // 2):
-        term = (factor * odd[i]) % p
+        #term = (factor * odd[i]) % p
+        term = cpu.naive_modular_multiplication(factor, odd[i], p)
         result[i] = (even[i] + term) % p
         result[i + n // 2] = (even[i] - term) % p
-        factor = (factor * g_mod_p) % p
+        #factor = (factor * g_mod_p) % p
+        factor = cpu.naive_modular_multiplication(factor, g_mod_p, p)
         
     return result
 
-def intt_cpu_rec(a, p, g):
-    n = len(a)
-    if n == 1:
-        return a
 
-    g_inv = pow(g, -1, p)
-
-    g_inv_mod_p = cpu.naive_modular_multiplication(g_inv, g_inv, p)
-    even = intt_cpu_rec(a[::2], p, g_inv_mod_p)
-    odd = intt_cpu_rec(a[1::2], p, g_inv_mod_p)
-
-    factor = 1
-    result = np.zeros(n, dtype=int)
-
-    for i in range(n // 2):
-        term = (factor * odd[i]) % p
-        result[i] = (even[i] + term) % p
-        result[i + n // 2] = (even[i] - term) % p
-        factor = (factor * g_inv_mod_p) % p
-        
-    return result
-
-def intt_cpu(a, p, g):
-    n = len(a)
-    a = intt_cpu_rec(a, p, g)
-    n_inv = pow(n, -1, p)
-    
-    return [cpu.naive_modular_multiplication(x, n_inv, p).item() for x in a]
-
-def ntt_cpu_opt(a, p, g, r, n_dash):
+def ntt_cpu_opt(a, p, g, r, n_dash, factor_mont):
     n = len(a)
     if n == 1:
         return a
         
     g_mod_p = cpu.optimized_montgomery_modular_multiplication(g, g, p, r, n_dash)
-    even = ntt_cpu_opt(a[::2], p, g_mod_p, r, n_dash)
-    odd = ntt_cpu_opt(a[1::2], p, g_mod_p, r, n_dash)
+    even = ntt_cpu_opt(a[::2], p, g_mod_p, r, n_dash, factor_mont)
+    odd = ntt_cpu_opt(a[1::2], p, g_mod_p, r, n_dash, factor_mont)
 
-    factor = 1;
-    result = np.zeros(n, dtype=int)
-
+    # factor = cpu.to_montgomery(1, p, r)
+    result = np.zeros(n, dtype=	np.longlong)
+    factor = factor_mont
     for i in range(n // 2):
-        term = (factor * odd[i]) % p
+        term = cpu.optimized_montgomery_modular_multiplication(factor, odd[i], p, r, n_dash)
         result[i] = (even[i] + term) % p
-        result[i + n // 2] = (even[i] - term) % p
-        factor = (factor * g_mod_p) % p
+        result[i + n // 2] = (even[i] - term + p) % p
+        factor = cpu.optimized_montgomery_modular_multiplication(factor, g_mod_p, p, r, n_dash)
         
     return result
 
-def intt_cpu_rec_opt(a, p, g, r, n_dash):
+
+def ntt_cpu_mont(a, p, g, r, n_dash):
     n = len(a)
-    if n == 1:
-        return a
-    g_inv = pow(g, -1, p)
-    #g_inv_mont = cpu.to_montgomery(g_inv, p, r)
-    g_inv_mod_p = cpu.optimized_montgomery_modular_multiplication(g_inv, g_inv, p, r, n_dash)
 
-    even = intt_cpu_rec_opt(a[::2], p, g_inv_mod_p, r, n_dash)
-    odd = intt_cpu_rec_opt(a[1::2], p, g_inv_mod_p, r, n_dash)
+    a_mont = cpu.to_montgomery(a, p, r)
+    g_mont = cpu.to_montgomery(g, p, r)
+    factor_mont = cpu.to_montgomery(1, p, r)
+    out_mont = ntt_cpu_opt(a_mont, p, g_mont, r, n_dash, factor_mont)
 
-    factor = 1
-    result = np.zeros(n, dtype=int)
-
-    for i in range(n // 2):
-        term = (factor * odd[i]) % p
-        result[i] = (even[i] + term) % p
-        result[i + n // 2] = (even[i] - term) % p
-        factor = (factor * g_inv_mod_p) % p
-        
+    result = cpu.from_montgomery(out_mont, p, r)
     return result
-
-def intt_cpu_opt(a, p, g, r, n_dash):
-    n = len(a)
-    a = intt_cpu_rec_opt(a, p, g, r, n_dash)
-    n_inv = pow(n, -1, p)
-    r, n_dash = cpu.montgomery_precomputation(p)
-    return [cpu.from_montgomery(cpu.optimized_montgomery_modular_multiplication(cpu.to_montgomery(x, p, r), cpu.to_montgomery(n_inv, p, r), p, r, n_dash), p, r).item() for x in a]
 
 
 def main():
@@ -107,10 +64,8 @@ def main():
     prime = 17
     primitive_root = 3
     r, n_dash = cpu.montgomery_precomputation(prime)
-    ntt_output = ntt_cpu(input_array, prime, primitive_root)
+    ntt_output = ntt_cpu_mont(input_array, prime, primitive_root, r, n_dash)
     print("NTT:", ntt_output)
-    intt_output = intt_cpu(ntt_output, prime, primitive_root)
-    print("INTT:", intt_output)
     
 if __name__=="__main__":
     main()

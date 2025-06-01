@@ -31,9 +31,8 @@ def main():
     a = random.randrange(N)
     b = random.randrange(N)
 
-    a_ntt = np.array([202, 401, 902, 403, 3003, 1233, 13])
-    a_intt = np.array([2, 10, 3, 10])
-    prime = 212801
+    a_ntt = np.array([15855066,17545046,13244418,19205212,15029570,12057533,11317568,19170781,10774776,11086278,18879902,17143861,19926379,14150914,16731560,15070006,15965981,15632563,11059058,11412600])
+    prime = 2305843009213693951
     primitive_root = 3
     r_ntt, n_dash_ntt = gpu.montgomery_precomputation(prime)
 
@@ -105,22 +104,12 @@ def main():
             lambda x,y: ntt_cpu.ntt_cpu(a_ntt, prime, primitive_root),
             lambda x,y: ntt_gpu.ntt_gpu(a_ntt, prime, primitive_root),
             (a, b), (a, b),
-            10_00, 10_00, True),
-        ("intt_naive",
-            lambda x,y: ntt_cpu.intt_cpu(a_intt, prime, primitive_root),
-            lambda x,y: ntt_gpu.intt_gpu(a_intt, prime, primitive_root),
-            (a, b), (a, b),
-            10_00, 10_00, True),
+            10, 1, True),
         ("ntt_mont",
-            lambda x,y: ntt_cpu.ntt_cpu_opt(a_ntt, prime, primitive_root, r_ntt, n_dash_ntt),
+            lambda x,y: ntt_cpu.ntt_cpu_mont(a_ntt, prime, primitive_root, r_ntt, n_dash_ntt),
             lambda x,y: ntt_gpu.ntt_gpu_opt(a_ntt, prime, primitive_root),
             (a, b), (a, b),
-            10_00, 10_00, True),
-        ("intt_mont",
-            lambda x,y: ntt_cpu.intt_cpu_opt(a_intt, prime, primitive_root, r_ntt, n_dash_ntt),
-            lambda x,y: ntt_gpu.intt_gpu_opt(a_intt, prime, primitive_root),
-            (a, b), (a, b),
-            10_00, 10_00, True),
+            10, 1, True),
     ]
 
     print(f"{'Kernel':20s}  {'CPU time (s)':>12s}   {'GPU time (s)':>12s}   {'speedup':>8s}")
