@@ -222,3 +222,67 @@ def optimized_montgomery_modular_multiplication(a, b, n, r, n_dash):
     return _optimized_montgomery_mul_kernel(
         a_gpu, b_gpu, n_gpu, r_mask_gpu, shift_gpu, n_dash_gpu
     )
+
+
+# Kernel for elementwise Karatsuba multiplication (recursive, but only for small 32-bit values)
+_karatsuba_kernel = cp.ElementwiseKernel(
+    in_params='uint64 a, uint64 b',
+    out_params='uint64 out',
+    operation=r'''
+        // Only for small values (32 bits or less)
+        unsigned long long x = a;
+        unsigned long long y = b;
+        if (x < (1ULL << 32) && y < (1ULL << 32)) {
+            // Use Karatsuba for 32-bit values
+            unsigned int m = 16;
+            unsigned int mask = (1U << m) - 1U;
+            unsigned int x0 = x & mask;
+            unsigned int x1 = x >> m;
+            unsigned int y0 = y & mask;
+            unsigned int y1 = y >> m;
+            unsigned long long z0 = (unsigned long long)x0 * y0;
+            unsigned long long z2 = (unsigned long long)x1 * y1;
+            unsigned long long z1 = (unsigned long long)(x0 + x1) * (y0 + y1) - z2 - z0;
+            out = (z2 << (2 * m)) + (z1 << m) + z0;
+        } else {
+            // Fallback to schoolbook for larger values
+            out = x * y;
+        }
+    ''',
+    name='karatsuba_mul_gpu'
+)
+
+def karatsuba_multiplication_gpu(a, b):
+    """
+    Elementwise Karatsuba multiplication for two cupy arrays or scalars (on GPU for 32-bit values, schoolbook for larger).
+    """
+    a_cp = cp.asarray(a, dtype=cp.uint64)
+    b_cp = cp.asarray(b, dtype=cp.uint64)
+    return _karatsuba_kernel(a_cp, b_cp)
+
+
+def montgomery_with_karatsuba_gpu(a, b, n, r, n_dash):
+    """
+    Optimized Montgomery multiplication using Karatsuba for the initial multiplication step (on GPU for 32-bit values, schoolbook for larger).
+    Fast REDC for r=2^k, elementwise:
+        t = karatsuba(a, b)
+        m = (t * n_dash) & (r-1)
+        u = (t + m*n) >> k
+        if u>=n: u-=n
+    """
+    a_cp = cp.asarray(a)
+    b_cp = cp.asarray(b)
+    n_cp = cp.asarray(n)
+    # Compute mask and shift
+    k = int(r).bit_length() - 1
+    mask = (1 << k) - 1
+    mask_cp = cp.asarray(mask, dtype=cp.uint64)
+    # Ensure k_cp is the same dtype as t (avoid float64 bug)
+    k_cp = cp.array(k, dtype=cp.uint64)
+    # Karatsuba multiplication (elementwise)
+    t = karatsuba_multiplication_gpu(a_cp, b_cp)
+    n_dash_cp = cp.asarray(n_dash, dtype=cp.uint64)
+    n_cp_b = cp.broadcast_to(n_cp.astype(cp.uint64), t.shape)
+    m = (t * n_dash_cp) & mask_cp
+    u = (t + m * n_cp_b) >> k_cp
+    return cp.where(u >= n_cp_b, u - n_cp_b, u)

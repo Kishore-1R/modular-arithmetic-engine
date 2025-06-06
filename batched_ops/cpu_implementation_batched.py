@@ -171,3 +171,63 @@ def optimized_montgomery_modular_multiplication(a, b, n, r, n_dash):
     m = (t * n_dash) & mask
     u = (t + m * n) >> k
     return np.where(u >= n, u - n, u)
+
+
+def karatsuba_multiplication(a, b):
+    """
+    Karatsuba multiplication for two Python integers or NumPy arrays of integers.
+    Accepts scalars or arrays; broadcasts over inputs.
+    """
+    a_arr = np.asarray(a)
+    b_arr = np.asarray(b)
+    # Use Python int for large numbers
+    def karatsuba(x, y):
+        # Base case for small numbers
+        if x.bit_length() <= 32 or y.bit_length() <= 32:
+            return x * y
+        n = max(x.bit_length(), y.bit_length())
+        m = n // 2
+        mask = (1 << m) - 1
+        x_low = x & mask
+        x_high = x >> m
+        y_low = y & mask
+        y_high = y >> m
+        z0 = karatsuba(x_low, y_low)
+        z2 = karatsuba(x_high, y_high)
+        z1 = karatsuba(x_low + x_high, y_low + y_high) - z2 - z0
+        return (z2 << (2 * m)) + (z1 << m) + z0
+    # Vectorized version
+    if a_arr.shape == () and b_arr.shape == ():
+        return karatsuba(int(a_arr), int(b_arr))
+    # Broadcast arrays
+    a_flat = a_arr.ravel()
+    b_flat = b_arr.ravel()
+    out = np.empty_like(a_flat, dtype=object)
+    for idx in range(a_flat.size):
+        out[idx] = karatsuba(int(a_flat[idx]), int(b_flat[idx]))
+    return out.reshape(a_arr.shape)
+
+
+def montgomery_with_karatsuba(a, b, n, r, n_dash):
+    """
+    Optimized Montgomery multiplication using Karatsuba for the initial multiplication step.
+    Fast REDC for r=2^k, elementwise:
+        t = karatsuba(a, b)
+        m = (t * n_dash) & (r-1)
+        u = (t + m*n) >> k
+        if u>=n: u-=n
+    Uses NumPy bitwise ops and Python int for large numbers.
+    """
+    a_arr = np.asarray(a)
+    b_arr = np.asarray(b)
+    k    = r.bit_length() - 1
+    mask = (1 << k) - 1
+    # Karatsuba multiplication (returns object dtype array)
+    t = karatsuba_multiplication(a_arr, b_arr)
+    # Convert n_dash and n to object arrays for broadcasting
+    n_dash_arr = np.broadcast_to(n_dash, t.shape)
+    n_arr = np.broadcast_to(n, t.shape)
+    m = (t * n_dash_arr) & mask
+    u = (t + m * n_arr) >> k
+    # Conditional subtraction
+    return np.where(u >= n_arr, u - n_arr, u)
