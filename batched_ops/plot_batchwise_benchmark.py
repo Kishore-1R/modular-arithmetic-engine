@@ -20,7 +20,7 @@ level2_methods = [
 level3_methods = [
     "karatsuba_multiplication",
     "montgomery_modular_multiplication",
-    "optimized_montgomery_modular_exponentiation",
+    "optimized_montgomery_modular_multiplication",
     "montgomery_with_karatsuba"
 ]
 
@@ -76,7 +76,7 @@ def plot_level(level, methods, title, filename):
 # Multiplication methods
 level1_mul = ["naive_modular_multiplication"]
 level2_mul = ["naive_modular_multiplication_loop"]
-level3_mul = ["karatsuba_multiplication", "montgomery_modular_multiplication", "optimized_montgomery_modular_exponentiation", "montgomery_with_karatsuba"]
+level3_mul = ["optimized_montgomery_modular_multiplication", "montgomery_with_karatsuba"]
 # Exponentiation methods
 level1_exp = ["naive_modular_exponentiation"]
 level2_exp = ["naive_modular_exponentiation_loop", "square_and_multiply_modular_exponentiation"]
@@ -87,3 +87,15 @@ plot_level(2, level2_mul, "Level 2: Multiplication (CPU vs GPU)", "level2_mul.pn
 plot_level(2, level2_exp, "Level 2: Exponentiation (CPU vs GPU)", "level2_exp.png")
 plot_level(3, level3_mul, "Level 3/4: Multiplication (CPU vs GPU)", "level3_mul.png")
 # (No exponentiation in level 3/4)
+
+# After all plots, print the timings for the largest batch size for each method
+largest_batch = batch_sizes[-1]
+print(f"\nTimings for largest batch size ({largest_batch}):")
+for level, method_list in zip([1,2,3], [level1_methods, level2_methods, level3_methods]):
+    print(f"\nLevel {level}:")
+    for method in method_list:
+        if largest_batch in results[level][method]:
+            cpu_time, gpu_time = results[level][method][largest_batch]
+            print(f"{method:40s} | CPU: {cpu_time:8.4f}s   GPU: {gpu_time:8.4f}s   speedup: {cpu_time/gpu_time:6.2f}x")
+        else:
+            print(f"{method:40s} | No data")

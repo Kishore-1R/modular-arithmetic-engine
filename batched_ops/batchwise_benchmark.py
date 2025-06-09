@@ -71,7 +71,7 @@ def run_all_benchmarks(batch_size=2_000_000):
         t_cpu = t1 - t0
         # GPU
         t0 = time.perf_counter()
-        out_gpu = gpu_fn(a_gpu, b_gpu, n_gpu)
+        out_gpu = gpu_fn(a_gpu, b_cpu, n_gpu)
         if sync_gpu:
             cp.cuda.Stream.null.synchronize()
         t1 = time.perf_counter()
@@ -143,6 +143,15 @@ def run_all_benchmarks(batch_size=2_000_000):
     bench_batch_times("montgomery_with_karatsuba",
                      cpu_karamont, gpu_karamont,
                      a3, b3, N3)
+
+    # Level-1: vectorized (using a_mul, b_mul, N3 for direct comparison with Montgomery)
+    a_mul = rng2.integers(0, N3, size=BATCH3, dtype=np.int64)
+    b_mul = rng2.integers(0, N3, size=BATCH3, dtype=np.int64)
+    bench_batch_times("naive_modular_multiplication_level3inputs",
+                     cpu.naive_modular_multiplication,
+                     gpu.naive_modular_multiplication,
+                     a_mul, b_mul, N3)
+
     return results
 
 
